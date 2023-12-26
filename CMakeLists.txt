@@ -6,9 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 
 # include headers
-# include_directories(
-#     ${PROJECT_SOURCE_DIR}/include
-# )
+include_directories(
+    ${PROJECT_SOURCE_DIR}/include
+)
 
 #opencv
 find_package(OpenCV REQUIRED)
@@ -24,26 +24,29 @@ set(CMAKE_CUDA_COMPILER $ENV{CUDA_Bin}/nvcc)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_50 --expt-extended-lambda -D_MWAITXINTRIN_H_INCLUDED")
 
 # tensorrt
-link_directories(/home/benchmarker/libs/TensorRT-8.6.1.6/lib)
-include_directories(/home/benchmarker/libs/TensorRT-8.6.1.6/include)
+link_directories($ENV{TensorRT_Lib})
+include_directories($ENV{TensorRT_Inc})
 
-# # add preprocessor library
-# add_library(pre_processor  src/preprocessor.cpp)
-# set_target_properties(pre_processor PROPERTIES POSITION_INDEPENDENT_CODE ON)
-# target_include_directories(pre_processor PUBLIC include)
+# add preprocessor library
+add_library(pre_processor  src/preprocessor.cpp)
+set_target_properties(pre_processor PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(pre_processor PUBLIC include)
 
 
-# # add postprocessor library
-# add_library(post_processor  src/postprocess.cpp)
-# set_target_properties(post_processor PROPERTIES POSITION_INDEPENDENT_CODE ON)
-# target_include_directories(post_processor PUBLIC include)
+# add postprocessor library
+add_library(post_processor  src/postprocess.cpp)
+set_target_properties(post_processor PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(post_processor PUBLIC include)
  
-# # make Inference library
-# add_library(Inference SHARED src/inference.cpp)
-# target_include_directories(Inference PUBLIC ${TensorRT_DIR}/include)
-# target_link_libraries(Inference PUBLIC pre_processor post_processor  nvinfer nvonnxparser stdc++fs  ${CUDA_LIBRARIES} ${OpenCV_LIBS} )
+# make Inference library
+add_library(Inference SHARED src/inference.cpp)
+target_include_directories(Inference PUBLIC ${TensorRT_DIR}/include)
+target_link_libraries(Inference PUBLIC pre_processor post_processor  nvinfer nvonnxparser stdc++fs  ${CUDA_LIBRARIES} ${OpenCV_LIBS} )
 
 add_executable(main main.cpp)
-target_link_libraries(main ${OpenCV_LIBS} )
-target_link_libraries(main nvinfer)
-target_link_libraries(main  ${CUDA_LIBRARIES})
+target_link_libraries(main PUBLIC Inference)
+
+# add_executable(main main.cpp)
+# target_link_libraries(main ${OpenCV_LIBS} )
+# target_link_libraries(main nvinfer)
+# target_link_libraries(main  ${CUDA_LIBRARIES})

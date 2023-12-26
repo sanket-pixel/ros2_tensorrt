@@ -14,9 +14,7 @@ class Preprocessor{
         Preprocessor(const int _resized_width, const int _resized_height){
             this->_resized_height = _resized_height;
             this->_resized_width = _resized_width; 
-
         }
-        // void initialize_globals(int resized_width, int resized_height);
-        void resize(cv::Mat input_image, cv::Mat &output_image);
-        void normalization(cv::Mat input_image, cv::Mat &output_image);
+        cv::Mat static_resize(cv::Mat& input_image);
+        
 };

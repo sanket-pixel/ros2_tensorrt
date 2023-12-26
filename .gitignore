@@ -33,3 +33,5 @@
 *.onnx
 *.engine
 **/build/**
+data/
+.vscode/

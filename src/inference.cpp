@@ -138,27 +138,33 @@ cv::Mat Inference::read_image(std::string image_path){
 }
 
 bool Inference::preprocess(cv::Mat img, cv::Mat &preprocessed_img ){
-    mPreprocess.resize(img, preprocessed_img);
-    mPreprocess.normalization(preprocessed_img, preprocessed_img);
+    preprocessed_img = mPreprocess.static_resize(img);
+    // mPreprocess.normalization(preprocessed_img, preprocessed_img);
 }
 
-bool Inference::enqueue_input(float* host_buffer, cv::Mat image){
-    nvinfer1::Dims input_dims = mEngine->getBindingDimensions(0);
-    for (size_t batch = 0; batch < 1; ++batch) {
-  
-        int offset = input_dims.d[1] * input_dims.d[2] * input_dims.d[3] * batch;
-        int r = 0 , g = 0, b = 0;
-        
-        for (int i = 0; i < input_dims.d[1] * input_dims.d[2] * input_dims.d[3]; ++i) {
-            if (i % 3 == 0) {
-                host_buffer[offset + r++] = *(reinterpret_cast<float*>(image.data) + i);
-            } else if (i % 3 == 1) {
-                host_buffer[offset + g++ + input_dims.d[2] * input_dims.d[3]] = *(reinterpret_cast<float*>(image.data) + i);
-            } else {
-                host_buffer[offset + b++ + input_dims.d[2] * input_dims.d[3] * 2] = *(reinterpret_cast<float*>(image.data) + i);
+ std::vector<Object> Inference::postprocess(cv::Mat img, float* output){
+    std::vector<Object> objects = mPostprocess.decode_outputs(output, scale, img_w, img_h);
+    // cv::Mat output_image = mPostprocess.draw_objects(img,objects);
+    return objects;
+}
+
+float* Inference::enqueue_input( cv::Mat img){
+    float* blob = new float[img.total()*3];
+    int channels = 3;
+    int img_h = img.rows;
+    int img_w = img.cols;
+    for (size_t c = 0; c < channels; c++) 
+    {
+        for (size_t  h = 0; h < img_h; h++) 
+        {
+            for (size_t w = 0; w < img_w; w++) 
+            {
+                blob[c * img_w * img_h + h * img_w + w] =
+                    (float)img.at<cv::Vec3b>(h, w)[c];
             }
         }
-    }    
+    }
+    return blob; 
 }
 
 
@@ -179,7 +185,7 @@ inline uint32_t getElementSize(nvinfer1::DataType t) noexcept
 
 bool Inference::initialize_inference(){      
         //  input buffers
-        int input_idx = mEngine->getBindingIndex("input");
+        int input_idx = mEngine->getBindingIndex(mParams.engineParams.inputTensorName);
         auto input_dims = mContext->getBindingDimensions(input_idx);
         nvinfer1::DataType input_type = mEngine->getBindingDataType(input_idx);
         size_t input_vol = 1;
@@ -192,7 +198,7 @@ bool Inference::initialize_inference(){
         bindings[input_idx] = device_input;
 
         //  output buffers
-        int output_idx = mEngine->getBindingIndex("output");
+        int output_idx = mEngine->getBindingIndex(mParams.engineParams.outputTensorName);
         auto output_dims = mContext->getBindingDimensions(output_idx);
         nvinfer1::DataType output_type = mEngine->getBindingDataType(output_idx);
         size_t output_vol = 1;
@@ -203,22 +209,22 @@ bool Inference::initialize_inference(){
         cudaMalloc((void**)&device_output, output_size_in_bytes);
         host_output = (float*)malloc(output_size_in_bytes);
         bindings[output_idx] = device_output;
-
-                 
 }
 
 
-void Inference::do_inference(){
-
-    cv::Mat img = read_image(mParams.ioPathsParams.image_path);
+std::vector<Object> Inference::do_inference(cv::Mat img){
+    img_w = img.cols;
+    img_h = img.rows;
+    scale =  std::min(mParams.modelParams.resized_image_size_width / (img.cols*1.0), mParams.modelParams.resized_image_size_height / (img.rows*1.0));
     cv::Mat preprocessed_image;
     Inference::preprocess(img, preprocessed_image);
+    fprintf(stderr, "save vis file\n");
     // populate host buffer with input image.
     auto start_time = std::chrono::high_resolution_clock::now();
-    enqueue_input(host_input, preprocessed_image);
+    host_input = enqueue_input(preprocessed_image);
     // copy input from host to device
     cudaMemcpy(device_input, host_input, input_size_in_bytes, cudaMemcpyHostToDevice);
-       // perform inference
+    // perform inference
     bool status_0 = mContext->executeV2(bindings); 
     // copy input from device to host
     cudaMemcpy(host_output, device_output, output_size_in_bytes, cudaMemcpyDeviceToHost);
@@ -226,8 +232,7 @@ void Inference::do_inference(){
     std::chrono::duration<float, std::milli> duration = end_time - start_time;
     latency = duration.count();
     // apply softmax to output and get prediction
-    float* class_flattened = static_cast<float*>(host_output);
-    std::vector<float> predictions(class_flattened, class_flattened + mParams.modelParams.num_classes);
-    mPostprocess.softmax_classify(predictions, verbose);
-
+    float* output = static_cast<float*>(host_output);
+    std::vector<Object> objects = Inference::postprocess(img, output);
+    return objects;
 }

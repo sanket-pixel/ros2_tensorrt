@@ -1,32 +1,19 @@
 #include "preprocessor.hpp"
 
 
-void Preprocessor::resize(cv::Mat input_image, cv::Mat &output_image){
-        cv::resize(input_image, output_image, cv::Size(_resized_width, _resized_height), 0, 0, cv::INTER_LINEAR);
+cv::Mat Preprocessor::static_resize(cv::Mat& input_image){
+    float r = std::min(_resized_width / (input_image.cols*1.0), _resized_height / (input_image.rows*1.0));
+    int unpad_w = r * input_image.cols;
+    int unpad_h = r * input_image.rows;
+    cv::Mat re(unpad_h, unpad_w, CV_8UC3);
+    cv::resize(input_image, re, re.size());
+    cv::Mat out(_resized_height, _resized_width, CV_8UC3, cv::Scalar(114, 114, 114));
+    re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
+    return out;
 }
 
 
-void Preprocessor::normalization(cv::Mat input_image, cv::Mat &output_image){
 
-        // Convert to float image and scale to [0, 1] range
-        cv::Mat float_image;
-        input_image.convertTo(float_image, CV_32FC3, 1.0 / 255.0);
-
-        // Define the mean and standard deviation values
-        cv::Scalar mean(0.485, 0.456, 0.406);
-        cv::Scalar stdDev(0.229, 0.224, 0.225);
-
-        // Subtract the mean from each channel
-        cv::Mat subtracted_image;
-        cv::subtract(float_image, mean, subtracted_image);
-
-        // Divide the subtracted image by the standard deviation
-        cv::Mat normalized_image;
-        cv::divide(subtracted_image, stdDev, normalized_image);
-
-        output_image = normalized_image;
-
-}
 
 
 
